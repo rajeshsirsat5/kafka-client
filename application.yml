@@ -1,0 +1,185 @@
+# =============================================================================
+#  AKHQ 0.26.0 — Complete Local Configuration
+#  Generated with all performance, topic filter, Java/Netty & UI optimizations
+# =============================================================================
+#
+#  HOW TO RUN (from the folder where this file lives):
+#
+#    java --add-exports=java.base/sun.security.x509=ALL-UNNAMED \
+#         --add-opens=java.base/java.lang=ALL-UNNAMED \
+#         -jar akhq-0.26.0.jar
+#
+#  OR set the env variable to point to this file from any location:
+#    export MICRONAUT_CONFIG_FILES=/path/to/application.yml
+#
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# 1. MICRONAUT SERVER  (DO NOT DISABLE — this IS the HTTP engine for AKHQ)
+# -----------------------------------------------------------------------------
+micronaut:
+  server:
+    port: 8080                    # AKHQ UI will be at http://localhost:8080
+    context-path: ""              # Leave empty for local; set "/akhq" only if behind a reverse proxy
+
+    # ✅ SSL is DISABLED for local use — no need for the JDK_JAVA_OPTIONS export
+    # If you ever enable SSL, uncomment the block below AND add the JVM flag:
+    #   --add-exports=java.base/sun.security.x509=ALL-UNNAMED
+    #
+    # ssl:
+    #   enabled: true
+    #   build-self-signed: true
+
+  # Keep Micronaut management endpoints available (health check, etc.)
+  management:
+    endpoints:
+      enabled: true
+      health:
+        enabled: true
+        details-visible: ANONYMOUS  # Lets you hit /health without auth
+
+# -----------------------------------------------------------------------------
+# 2. AKHQ SERVER SETTINGS
+# -----------------------------------------------------------------------------
+akhq:
+  server:
+    access-log:
+      enabled: true
+      name: org.akhq.log.access
+      format: "[Date: {}] [Duration: {} ms] [Url: {} {}] [Status: {}] [Ip: {}] [User: {}] [Length: {}]"
+
+  # ---------------------------------------------------------------------------
+  # 3. PAGINATION — how many topics show per page in the UI list
+  # ---------------------------------------------------------------------------
+  pagination:
+    page-size: 10                 # Default is 25 — reduced to 10 for faster load
+
+  # ---------------------------------------------------------------------------
+  # 4. KAFKA CLUSTER CONNECTION  ← UPDATE THESE VALUES FOR YOUR LOCAL KAFKA
+  # ---------------------------------------------------------------------------
+  connections:
+    local-kafka:                  # A friendly name (no dots allowed here)
+      properties:
+        bootstrap.servers: "localhost:9092"   # ← your local Kafka broker address
+
+        # Uncomment below if your local Kafka uses SASL/PLAIN authentication:
+        # security.protocol: SASL_PLAINTEXT
+        # sasl.mechanism: PLAIN
+        # sasl.jaas.config: >
+        #   org.apache.kafka.common.security.plain.PlainLoginModule required
+        #   username="your-user" password="your-password";
+
+  # ---------------------------------------------------------------------------
+  # 5. DEFAULT KAFKA CLIENT PROPERTIES (admin / producer / consumer)
+  # ---------------------------------------------------------------------------
+  clients-defaults:
+    consumer:
+      properties:
+        isolation.level: read_committed       # Only read fully committed messages
+        max.poll.records: 50                  # Limit records fetched per poll (reduces memory pressure)
+        fetch.max.wait.ms: 500               # Don't wait longer than 500ms for data
+        session.timeout.ms: 10000            # Consumer session timeout
+        request.timeout.ms: 5000            # Kafka API request timeout
+    admin:
+      properties:
+        request.timeout.ms: 5000            # Admin API calls timeout faster — prevents UI hangs
+
+  # ---------------------------------------------------------------------------
+  # 6. TOPIC LIST FILTERS — Only show your "carbon.*" topics
+  # ---------------------------------------------------------------------------
+  topic:
+    # ✅ Mark everything that is NOT a "carbon." topic as internal
+    # Internal topics are hidden by default (controlled by ui-options below)
+    internal-regexps:
+      - "^__.*"                   # Standard Kafka internals (e.g. __consumer_offsets)
+      - "^_.*"                    # Other common internal prefixes (e.g. _schemas)
+      - "^(?!carbon\\.).*"        # ← KEY RULE: hide ALL topics not starting with "carbon."
+
+    stream-regexps:
+      - ".*-repartition"          # Kafka Streams repartition topics
+      - ".*-changelog"            # Kafka Streams changelog topics
+
+    # Default values for the "Create Topic" form (optional, just convenience)
+    replication: 1                # Set to 1 for local single-broker Kafka
+    partition: 1                  # Set to 1 for local development
+
+  # ---------------------------------------------------------------------------
+  # 7. TOPIC DATA — Controls how many messages are fetched & shown
+  # ---------------------------------------------------------------------------
+  topic-data:
+    size: 10                      # ✅ Max records per page (default: 50 → reduced to 10 to prevent timeouts)
+    poll-timeout: 1000            # Time (ms) to wait in poll if no data in buffer (default: 1000 — keep as-is)
+    kafka-max-message-length: 50000  # ✅ Max message size sent to UI in bytes (default: 1,000,000 → reduced to 50KB)
+
+  # ---------------------------------------------------------------------------
+  # 8. UI OPTIONS — Performance & display defaults
+  # ---------------------------------------------------------------------------
+  ui-options:
+    topic:
+      default-view: HIDE_INTERNAL       # ✅ Hides all topics marked as internal — only shows carbon.* topics
+      skip-consumer-groups: true        # ✅ BIG WIN: skips extra API calls to fetch consumer group info per topic
+      skip-last-record: true            # ✅ Skips fetching last record timestamp per topic (saves API calls)
+      show-all-consumer-groups: false   # Don't auto-expand consumer group lists
+      groups-default-view: HIDE_EMPTY   # ✅ Hides empty consumer groups — improves performance
+
+    topic-data:
+      sort: NEWEST                      # Show newest messages first when browsing topic data
+
+  # ---------------------------------------------------------------------------
+  # 9. SECURITY — Basic local setup (open access, no auth for local dev)
+  # ---------------------------------------------------------------------------
+  security:
+    default-group: admin                # All users (even unauthenticated) get admin access locally
+
+    groups:
+      admin:
+        roles:
+          - topic/read
+          - topic/insert
+          - topic/delete
+          - topic/config/update
+          - node/read
+          - node/config/update
+          - topic/data/read
+          - topic/data/insert
+          - topic/data/delete
+          - group/read
+          - group/delete
+          - group/offsets/update
+          - registry/read
+          - registry/insert
+          - registry/update
+          - registry/delete
+          - connect/read
+          - connect/insert
+          - connect/update
+          - connect/delete
+          - acls/read
+        attributes:
+          topics-filter-regexp: ".*"    # Admins can see all topics (filter is handled above by internal-regexps)
+
+# =============================================================================
+#  QUICK REFERENCE — What each section does
+# =============================================================================
+#
+#  Section 1 — micronaut.server      : The HTTP engine. NEVER disable Micronaut.
+#  Section 2 — akhq.server           : Access logging
+#  Section 3 — akhq.pagination       : Topics per page in list view
+#  Section 4 — akhq.connections      : Your Kafka broker address (update this!)
+#  Section 5 — akhq.clients-defaults : Timeouts for Kafka admin/producer/consumer
+#  Section 6 — akhq.topic            : Internal topic regexps (hides non-carbon topics)
+#  Section 7 — akhq.topic-data       : Max messages per page (set to 10 to avoid timeouts)
+#  Section 8 — akhq.ui-options       : Performance UI defaults (skip groups, skip last record)
+#  Section 9 — akhq.security         : Open admin access for local dev (no login needed)
+#
+# =============================================================================
+#
+#  RUN COMMAND (copy-paste ready):
+#
+#    java --add-exports=java.base/sun.security.x509=ALL-UNNAMED \
+#         --add-opens=java.base/java.lang=ALL-UNNAMED \
+#         -jar akhq-0.26.0.jar
+#
+#  Then open: http://localhost:8080
+#
+# =============================================================================
