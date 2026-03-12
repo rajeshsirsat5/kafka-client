@@ -1,0 +1,194 @@
+Create a small runnable Python project for generic JSON-to-Protobuf mapping with Kafka integration. 
+
+Project goal:
+The Protobuf schema must remain fixed, while future source formats should be supported by creating new mapping YAML files only. Core mapping logic must stay independent from Kafka transport logic.
+
+Requirements:
+
+1. Create a protobuf schema file named business.proto with:
+   - Address
+   - BusinessDetails
+   - KpDetail
+   - AccessDetails
+   - BusinessMessage
+
+2. Create sample input JSON files:
+   - input_nested.json
+   - input_flat.json
+
+   These two inputs must have different structures but both map to the same protobuf schema.
+
+3. Create mapping YAML files:
+   - mapping_nested.yaml
+   - mapping_flat.yaml
+
+   These should map the two source JSON formats into the protobuf structure.
+
+4. Create a core Python mapper module that:
+   - loads input JSON
+   - loads YAML mapping
+   - uses JSONPath to extract values
+   - supports:
+     - scalar
+     - object
+     - array_primitive
+     - array_object
+   - builds a canonical dict
+   - converts the canonical dict into the protobuf message using google.protobuf.json_format.ParseDict
+   - exposes clean reusable methods/classes
+   - contains no Kafka-specific logic
+
+5. Structure the code cleanly so that Kafka transport is independent from core mapping logic.
+   Suggested architecture:
+   - core/ for mapping engine and business logic
+   - kafka/ for consumer and producer adapters
+   - tests/ for unit tests and BDD tests
+
+6. Create a Kafka consumer module that:
+   - consumes JSON payloads from an input Kafka topic
+   - selects the appropriate mapping YAML
+   - invokes the core mapper
+   - passes the protobuf result to a Kafka producer
+   - keeps Kafka concerns separate from mapper logic
+   - is written in a way that can be easily mocked in tests
+
+7. Create a Kafka producer module that:
+   - publishes the protobuf message or serialized protobuf bytes to an output Kafka topic
+   - is independent from mapping logic
+
+8. Create a configuration approach for Kafka and app settings.
+   Suggested:
+   - app_config.yaml or environment variables
+   - include topic names, bootstrap servers, consumer group, mapping selection config
+
+9. Add unit tests using pytest:
+   - test mapper for nested input
+   - test mapper for flat input
+   - test canonical dict generation
+   - test protobuf generation
+   - test missing optional fields
+   - test array mapping behavior
+   - test Kafka consumer logic with mocked mapper and mocked producer
+   - test Kafka producer logic with mocks
+
+10. Add BDD tests using behave or pytest-bdd.
+    Cover scenarios like:
+   - Given a nested JSON message, when it is consumed, then it is mapped to the expected protobuf and published
+   - Given a flat JSON message, when it is consumed, then it is mapped and published
+   - Given invalid input JSON, when it is consumed, then error handling is triggered
+   - Given missing mapping configuration, when processing starts, then an appropriate error is raised
+
+11. Create a README.md that includes:
+   - project overview
+   - architecture
+   - folder structure
+   - setup instructions
+   - protobuf generation steps
+   - how to run locally
+   - how to run tests
+   - how to run BDD tests
+   - how Kafka integration works
+   - how to add a new source format by only adding a new mapping YAML
+   - design note explaining that Kafka transport is separate from core logic
+
+12. Create a pyproject.toml compatible with uv for dependency management.
+    Do not create requirements.txt.
+
+    Dependencies should include:
+    - protobuf
+    - grpcio-tools
+    - pyyaml
+    - jsonpath-ng
+    - confluent-kafka
+    - pytest
+    - pytest-bdd
+
+    Ensure the project runs with:
+    uv sync
+    uv run python main.py
+    uv run pytest
+
+13. Create a small runnable main entry point that:
+   - can run locally without Kafka using sample input files
+   - can also demonstrate Kafka mode through separate modules
+
+14. Add logging and error handling:
+   - invalid JSON
+   - invalid mapping file
+   - missing source path
+   - protobuf conversion issues
+   - Kafka publish/consume failures
+
+15. Use clean code and practical Python design:
+   - type hints where practical
+   - separation of concerns
+   - no unnecessary overengineering
+
+16. Generate business_pb2.py if possible.
+    If generation cannot be done automatically, include exact commands in README.
+
+17. Suggested project structure:
+
+json-proto-mapper/
+  business.proto
+  business_pb2.py
+  requirements.txt
+  README.md
+  app_config.yaml
+  input_nested.json
+  input_flat.json
+  mapping_nested.yaml
+  mapping_flat.yaml
+  main.py
+  core/
+    mapper.py
+    mapping_loader.py
+    exceptions.py
+    models.py
+  kafka/
+    consumer.py
+    producer.py
+    runner.py
+  tests/
+    unit/
+      test_mapper.py
+      test_consumer.py
+      test_producer.py
+    bdd/
+      features/
+        mapping.feature
+      steps/
+        mapping_steps.py
+
+18. Use mocks/fakes in tests rather than requiring a real Kafka broker.
+    Keep Kafka integration testable without external infrastructure.
+
+19. Make the implementation production-friendly but still simple enough to understand.
+
+20. After creating files, run basic validation commands if available:
+   - python -m pytest
+   - behave or pytest-bdd command
+   - basic syntax check if needed
+
+Acceptance criteria:
+- Python version 3.12.12
+- Same protobuf schema works with multiple input JSON formats
+- Adding a new input format should require only a new mapping YAML file, not mapper engine changes
+- Kafka logic must be separate from mapping logic
+- Unit tests and BDD tests must pass
+- README must be complete and executable
+
+Important design constraints:
+- Do not tightly couple Kafka consumer/producer classes to the mapper implementation.
+- The mapper must be directly unit testable without Kafka.
+- Prefer dependency injection for producer and mapper dependencies.
+- Keep transport adapters thin.
+- Use mocks in tests; do not require Docker, Testcontainers, or a live Kafka broker.
+- Make mapping selection configurable, not hardcoded.
+
+For BDD, write feature files in Given/When/Then style with realistic examples and keep step definitions clean and reusable.
+
+Create requirements.txt with all dependencies.
+
+The project should be compatible with uv as the package manager and environment manager.
+Use pyproject.toml instead of requirements.txt.
